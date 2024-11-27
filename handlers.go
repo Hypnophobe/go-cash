@@ -34,19 +34,20 @@ func writeJSONResponse(w http.ResponseWriter, statusCode int, response interface
 func getAddress(w http.ResponseWriter, r *http.Request) {
 	address := r.PathValue("address")
 
-	if validateAddress(address) {
-		balance := queryAddress(sqliteDatabase, address)
-
-		response := getAddressResponse{
-			Address: address,
-			Balance: balance,
-		}
-
-		writeJSONResponse(w, http.StatusOK, map[string]interface{}{"ok": true, "data": response})
-	} else {
+	if !validateAddress(address) {
 		response := map[string]interface{}{"ok": false, "error": "invalid address"}
 		writeJSONResponse(w, http.StatusBadRequest, response)
+		return
 	}
+
+	balance := queryAddress(sqliteDatabase, address)
+
+	response := getAddressResponse{
+		Address: address,
+		Balance: balance,
+	}
+
+	writeJSONResponse(w, http.StatusOK, map[string]interface{}{"ok": true, "data": response})
 }
 
 func getAddresses(w http.ResponseWriter, r *http.Request) {
@@ -76,29 +77,31 @@ func createTransaction(w http.ResponseWriter, r *http.Request) {
 	senderAddress := generateAddress(req.Pkey)
 	senderBalance := queryAddress(sqliteDatabase, senderAddress)
 
-	if validateAddress(req.Address) {
-		if senderBalance >= req.Amount {
-			updateAddress(sqliteDatabase, senderAddress, senderBalance-req.Amount)
-			recipientBalance := queryAddress(sqliteDatabase, req.Address)
-
-			if recipientBalance > 0 {
-				updateAddress(sqliteDatabase, req.Address, recipientBalance+req.Amount)
-			} else {
-				insertAddress(sqliteDatabase, req.Address, req.Amount)
-			}
-
-			insertTransaction(sqliteDatabase, senderAddress, req.Amount, req.Address, int(time.Now().Unix()))
-
-			response := map[string]interface{}{"ok": true}
-			writeJSONResponse(w, http.StatusOK, response)
-		} else {
-			response := map[string]interface{}{"ok": false, "error": "insufficient funds"}
-			writeJSONResponse(w, http.StatusBadRequest, response)
-		}
-	} else {
+	if !validateAddress(req.Address) {
 		response := map[string]interface{}{"ok": false, "error": "invalid address"}
 		writeJSONResponse(w, http.StatusBadRequest, response)
+		return
 	}
+
+	if senderBalance < req.Amount {
+		response := map[string]interface{}{"ok": false, "error": "insufficient funds"}
+		writeJSONResponse(w, http.StatusBadRequest, response)
+		return
+	}
+
+	updateAddress(sqliteDatabase, senderAddress, senderBalance-req.Amount)
+	recipientBalance := queryAddress(sqliteDatabase, req.Address)
+
+	if recipientBalance > 0 {
+		updateAddress(sqliteDatabase, req.Address, recipientBalance+req.Amount)
+		return
+	}
+
+	insertAddress(sqliteDatabase, req.Address, req.Amount)
+	insertTransaction(sqliteDatabase, senderAddress, req.Amount, req.Address, int(time.Now().Unix()))
+
+	response := map[string]interface{}{"ok": true}
+	writeJSONResponse(w, http.StatusOK, response)
 }
 
 func getTransaction(w http.ResponseWriter, r *http.Request) {
@@ -190,29 +193,31 @@ func submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if qBlock == req.PreviousBlock {
-		if req.Block == genBlock(req.PreviousBlock, req.Address, req.Nonce) {
-			insertBlock(sqliteDatabase, req.Block, req.PreviousBlock, req.Address, req.Nonce, int(time.Now().Unix()))
-			oldBalance := queryAddress(sqliteDatabase, req.Address)
-
-			if oldBalance > 0 {
-				updateAddress(sqliteDatabase, req.Address, oldBalance+1)
-			} else {
-				insertAddress(sqliteDatabase, req.Address, oldBalance+1)
-			}
-
-			insertTransaction(sqliteDatabase, "null", 1, req.Address, int(time.Now().Unix()))
-			response := map[string]interface{}{"ok": true}
-			writeJSONResponse(w, http.StatusOK, response)
-			return
-		} else {
-			response := map[string]interface{}{"ok": false, "error": "invalid block"}
-			writeJSONResponse(w, http.StatusBadRequest, response)
-		}
-	} else {
+	if qBlock != req.PreviousBlock {
 		response := map[string]interface{}{"ok": false, "error": "previous block mismatch"}
 		writeJSONResponse(w, http.StatusBadRequest, response)
+		return
 	}
+
+	if req.Block != genBlock(req.PreviousBlock, req.Address, req.Nonce) {
+		response := map[string]interface{}{"ok": false, "error": "invalid block"}
+		writeJSONResponse(w, http.StatusBadRequest, response)
+		return
+	}
+
+	insertBlock(sqliteDatabase, req.Block, req.PreviousBlock, req.Address, req.Nonce, int(time.Now().Unix()))
+	oldBalance := queryAddress(sqliteDatabase, req.Address)
+
+	if oldBalance > 0 {
+		updateAddress(sqliteDatabase, req.Address, oldBalance+1)
+		return
+	}
+
+	insertAddress(sqliteDatabase, req.Address, oldBalance+1)
+	insertTransaction(sqliteDatabase, "null", 1, req.Address, int(time.Now().Unix()))
+
+	response := map[string]interface{}{"ok": true}
+	writeJSONResponse(w, http.StatusOK, response)
 }
 
 func getTotalSupply(w http.ResponseWriter, r *http.Request) {

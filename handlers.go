@@ -94,6 +94,8 @@ func createTransaction(w http.ResponseWriter, r *http.Request) {
 
 	if recipientBalance > 0 {
 		updateAddress(sqliteDatabase, req.Address, recipientBalance+req.Amount)
+		response := map[string]interface{}{"ok": true}
+		writeJSONResponse(w, http.StatusOK, response)
 		return
 	}
 
@@ -210,6 +212,8 @@ func submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	if oldBalance > 0 {
 		updateAddress(sqliteDatabase, req.Address, oldBalance+1)
+		response := map[string]interface{}{"ok": true}
+		writeJSONResponse(w, http.StatusOK, response)
 		return
 	}
 

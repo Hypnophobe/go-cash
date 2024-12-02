@@ -26,12 +26,14 @@ type SubmittedBlock struct {
 	Nonce         string `json:"nonce"`
 }
 
+type Address struct {
+	Address string `json:"address"`
+	Balance int    `json:"balance"`
+}
+
 type GetAddressResponse struct {
-	Data struct {
-		Address string `json:"address"`
-		Balance int    `json:"balance"`
-	} `json:"data"`
-	Ok bool `json:"ok"`
+	Addresses []Address `json:"addresses"`
+	Ok        bool      `json:"ok"`
 }
 
 func getPrevBlock() (string, error) {
@@ -115,11 +117,11 @@ func getBalance(address string) (int, error) {
 		return 0, fmt.Errorf("failed to decode balance response: %v", err)
 	}
 
-	if !balanceResp.Ok {
+	if !balanceResp.Ok || len(balanceResp.Addresses) == 0 {
 		return 0, fmt.Errorf("could not fetch balance")
 	}
 
-	return balanceResp.Data.Balance, nil
+	return balanceResp.Addresses[0].Balance, nil
 }
 
 var address = flag.String("a", "", "The address to deposit mined funds")
@@ -141,7 +143,7 @@ func main() {
 		fmt.Printf("prevBlock: %s\n", prevBlock)
 
 		newBlock := generateBlock(prevBlock)
-		fmt.Printf("Hash: %s\n", newBlock)
+		fmt.Printf("newBlock: %s\n", newBlock)
 
 		ok, err := submitBlock(prevBlock)
 		if err != nil {
@@ -156,6 +158,6 @@ func main() {
 			log.Fatalf("Error fetching balance: %v", err)
 		}
 
-		fmt.Printf("Success %s:%d\n", *address, balance)
+		fmt.Printf("SUCCESS:%s:%d\n", *address, balance)
 	}
 }

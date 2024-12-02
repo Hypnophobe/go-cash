@@ -10,19 +10,18 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 )
 
 var syncNode = "http://localhost:8080/"
 
-type Data struct {
+type Address struct {
 	Address string `json:"address"`
 	Balance int    `json:"balance"`
 }
 
-type Response struct {
-	Data Data `json:"data"`
-	OK   bool `json:"ok"`
+type GetAddressResponse struct {
+	Addresses []Address `json:"addresses"`
+	OK        bool      `json:"ok"`
 }
 
 type ErrorResponse struct {
@@ -30,52 +29,66 @@ type ErrorResponse struct {
 	OK    bool   `json:"ok"`
 }
 
+func usage() {
+	fmt.Println("Usage:")
+	fmt.Println("  -b string The address to check the balance of")
+	fmt.Println("  -s        Send a transaction")
+	fmt.Println("  -p string The password for the private key (for send)")
+	fmt.Println("  -a int    The amount to send in the transaction (for send)")
+	fmt.Println("  -r string The recipient address to send to (for send)")
+}
+
 func main() {
 	balanceAddress := flag.String("b", "", "The address to check the balance of")
+	send := flag.Bool("s", false, "Send a transaction")
 	password := flag.String("p", "", "The password for the private key (for send)")
-	address := flag.String("t", "", "The address to send to (for send)")
 	amount := flag.Int("a", 0, "The amount to send in the transaction (for send)")
+	address := flag.String("r", "", "The address to send to (for send)")
+
+	flag.Usage = usage
 
 	flag.Parse()
 
 	if *balanceAddress != "" {
-		getBalance(*balanceAddress)
+		balance, err := getBalance(*balanceAddress)
+		if err != nil {
+			log.Fatalf("Error fetching balance: %v", err)
+		}
+		fmt.Printf("Address: %s\n", *balanceAddress)
+		fmt.Printf("Balance: %d\n", balance)
 		return
 	}
 
-	if *password != "" && *address != "" && *amount > 0 {
+	if *send {
+		if *password == "" || *address == "" || *amount <= 0 {
+			fmt.Println("Error: When using -s flag, the flags -p, -t, and -a must be provided.")
+			flag.Usage()
+			return
+		}
 		sendTransaction(*password, *address, *amount)
 		return
 	}
 
-	printHelp()
+	flag.Usage()
 }
 
-func printHelp() {
-	fmt.Println("Usage:")
-	fmt.Printf("  %s -b (address)\n", os.Args[0])
-	fmt.Printf("  %s -p (password) -t (address) -a (amount)\n", os.Args[0])
-}
-
-func getBalance(address string) {
-	resp, err := http.Get(syncNode + "address/" + address)
+func getBalance(address string) (int, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/address/%s", syncNode, address))
 	if err != nil {
-		log.Fatalln("Failed to connect:", err)
+		return 0, fmt.Errorf("failed to fetch balance: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalln("Failed to read response body:", err)
+	var balanceResp GetAddressResponse
+	if err := json.NewDecoder(resp.Body).Decode(&balanceResp); err != nil {
+		return 0, fmt.Errorf("failed to decode balance response: %v", err)
 	}
 
-	var data Response
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		log.Fatalln("Failed to unmarshal JSON:", err)
+	if !balanceResp.OK || len(balanceResp.Addresses) == 0 {
+		return 0, fmt.Errorf("could not fetch balance for address %s", address)
 	}
 
-	fmt.Printf("Address: %s / Balance: %d\n", data.Data.Address, data.Data.Balance)
+	return balanceResp.Addresses[0].Balance, nil
 }
 
 func generatePkey(password string) string {

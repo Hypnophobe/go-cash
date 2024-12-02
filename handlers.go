@@ -7,11 +7,6 @@ import (
 	"time"
 )
 
-type getAddressResponse struct {
-	Address string `json:"address"`
-	Balance int    `json:"balance"`
-}
-
 type TransactionRequest struct {
 	Pkey    string `json:"pkey"`
 	Address string `json:"address"`
@@ -25,10 +20,10 @@ type submittedBlock struct {
 	Nonce         string `json:"nonce"`
 }
 
-func writeJSONResponse(w http.ResponseWriter, statusCode int, response interface{}) {
+func writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(data)
 }
 
 func getAddress(w http.ResponseWriter, r *http.Request) {
@@ -42,25 +37,36 @@ func getAddress(w http.ResponseWriter, r *http.Request) {
 
 	balance := queryAddress(sqliteDatabase, address)
 
-	response := getAddressResponse{
-		Address: address,
-		Balance: balance,
+	response := map[string]interface{}{
+		"address": address,
+		"balance": balance,
 	}
 
-	writeJSONResponse(w, http.StatusOK, map[string]interface{}{"ok": true, "data": response})
+	writeJSONResponse(w, http.StatusOK, map[string]interface{}{"ok": true, "addresses": []map[string]interface{}{response}})
 }
 
 func getAddresses(w http.ResponseWriter, r *http.Request) {
 	addresses, err := queryAddresses(sqliteDatabase)
 	if err != nil {
-		response := map[string]interface{}{"ok": false, "error": "failed to retrieve addresses"}
+		response := map[string]interface{}{
+			"ok":    false,
+			"error": "failed to retrieve addresses",
+		}
 		writeJSONResponse(w, http.StatusInternalServerError, response)
 		return
 	}
 
+	var result []map[string]interface{}
+	for _, addr := range addresses {
+		result = append(result, map[string]interface{}{
+			"address": addr.Address,
+			"balance": addr.Balance,
+		})
+	}
+
 	response := map[string]interface{}{
 		"ok":        true,
-		"addresses": addresses,
+		"addresses": result,
 	}
 	writeJSONResponse(w, http.StatusOK, response)
 }
@@ -121,7 +127,7 @@ func getTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, map[string]interface{}{"ok": true, "transaction": transaction})
+	writeJSONResponse(w, http.StatusOK, map[string]interface{}{"ok": true, "transactions": []interface{}{transaction}})
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {

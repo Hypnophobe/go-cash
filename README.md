@@ -3,19 +3,32 @@ Go Cash is a fictional centralized economy, built for the purpose of learning Go
 
 ## Installation
 
-Clone the repository, and build the binary:
-
-
-    git clone https://github.com/Hypnophobe/go-cash && cd go-cash && go build .
-
+1. Clone the respository:
+    ```bash
+    git clone https://github.com/Hypnophobe/go-cash.git && cd go-cash
+2. Build the desired binaries:
+    ```bash
+    go build -o gc-server .
+    go build -o gc-wallet wallet/main.go
+    go build -o gc-miner miner/main.go
 ## Usage
 
-Run the server using the following command:
+### Server
 
-    ./go-cash -db <path_to_your_database_file> [-o]
+Start the server:
+```bash
+./gc-server -db (database)
+```
+To initialize the database (only required on the first run), use the -o flag:
+```bash
+./gc-server -db (database) -o
+```
+The -o flag will overwrite the database, so it should only be used when setting up for the first time or if you wish to reset the database.
 
+### Wallet
 
-### Flags
+Run `./gc-wallet` without any flags.
 
-- `-db <path_to_your_database_file>`: Path to the SQLite database file. This flag is required.
-- `-o`: Optional flag to overwrite the database if it already exists. If omitted, the application will attempt to use the existing database.
+### Miner
+
+Run `./gc-miner` without any flags.
